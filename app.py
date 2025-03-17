@@ -1,9 +1,9 @@
 import streamlit as st
 import xml.etree.ElementTree as ET
-import os
 import tempfile
 import zipfile
 import io
+import os
 
 # Function to read and parse an XML file
 def parse_xml(file_path):
@@ -11,22 +11,24 @@ def parse_xml(file_path):
     root = tree.getroot()
     return tree, root
 
-# Function to extract relevant data from spcultures_vlandia.xml
+# Function to extract all relevant data from spcultures_vlandia.xml
 def extract_culture_data(file_path):
     tree, root = parse_xml(file_path)
     culture_data = {}
 
+    # Extract relevant data like culture ID, NPC names, equipment, etc.
     for elem in root.iter():
         if elem.tag == 'culture':  # Assuming culture ID is in <culture> tags
             culture_data['culture_id'] = elem.text
-        if elem.tag == 'name':  # Assuming NPC names are stored under <name> tags
+        elif elem.tag == 'name':  # Assuming NPC names are stored under <name> tags
             if 'npc_names' not in culture_data:
                 culture_data['npc_names'] = []
             culture_data['npc_names'].append(elem.text)
-        if elem.tag == 'equipment':  # Assuming equipment IDs are stored under <equipment> tags
+        elif elem.tag == 'equipment':  # Assuming equipment IDs are stored under <equipment> tags
             if 'equipment_ids' not in culture_data:
                 culture_data['equipment_ids'] = []
             culture_data['equipment_ids'].append(elem.text)
+        # Add more tags to extract data for other relevant fields like traits, skills, etc.
 
     return culture_data
 
@@ -34,11 +36,10 @@ def extract_culture_data(file_path):
 def save_xml(tree, file_path):
     tree.write(file_path)
 
-# Function to propagate changes to related files based on spcultures_vlandia.xml
+# Function to propagate changes to related files
 def propagate_changes_to_related_files(modified_data, uploaded_files):
     """
-    Given the modified data (e.g., NPC names, equipment, traits in spcultures_vlandia.xml),
-    propagate the changes to all related files.
+    Given the modified data, propagate the changes to all related files.
     """
     updated_files = []  # List to store paths of updated files
 
@@ -46,32 +47,16 @@ def propagate_changes_to_related_files(modified_data, uploaded_files):
     for file in uploaded_files:
         tree, root = parse_xml(file)
         
-        # Modify the culture, NPC names, equipment, or other elements based on the modified data
-        if 'spcultures_vlandia.xml' in file:
-            # For the culture file itself, we will be changing NPC names, culture ID, etc.
-            for elem in root.iter():
-                # Example: Update culture name
-                if elem.tag == 'culture' and elem.text == modified_data.get('old_culture'):
-                    elem.text = modified_data.get('new_culture')
-                
-                # Example: Update NPC names
-                if elem.tag == 'name' and elem.text == modified_data.get('old_npc_name'):
-                    elem.text = modified_data.get('new_npc_name')
-
-                # Example: Update equipment IDs
-                if elem.tag == 'equipment' and elem.text == modified_data.get('old_equipment_id'):
-                    elem.text = modified_data.get('new_equipment_id')
-
-        # For other files, propagate the relevant changes (NPC names, equipment IDs)
-        else:
-            for elem in root.iter():
-                # Example: Update NPC names in NPC character files
-                if elem.tag == 'name' and elem.text == modified_data.get('old_npc_name'):
-                    elem.text = modified_data.get('new_npc_name')
-
-                # Example: Update equipment IDs
-                if elem.tag == 'equipment' and elem.text == modified_data.get('old_equipment_id'):
-                    elem.text = modified_data.get('new_equipment_id')
+        # Apply changes to spcultures_vlandia.xml (or any other file)
+        for elem in root.iter():
+            if elem.tag == 'culture' and elem.text == modified_data.get('old_culture'):
+                elem.text = modified_data.get('new_culture')
+            
+            if elem.tag == 'name' and elem.text == modified_data.get('old_npc_name'):
+                elem.text = modified_data.get('new_npc_name')
+            
+            if elem.tag == 'equipment' and elem.text == modified_data.get('old_equipment_id'):
+                elem.text = modified_data.get('new_equipment_id')
 
         # Save the modified file
         save_xml(tree, file)
@@ -113,7 +98,7 @@ def main():
             
             st.write("Files uploaded successfully. Now, make the modifications!")
 
-            # Step 2: Extract Data from spcultures_vlandia.xml (e.g., culture ID, NPC names, equipment IDs)
+            # Step 2: Extract Data from spcultures_vlandia.xml
             culture_data = {}
             for file_path in uploaded_file_paths:
                 if 'spcultures_vlandia.xml' in file_path:
