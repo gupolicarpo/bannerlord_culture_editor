@@ -1,6 +1,7 @@
 import streamlit as st
 import xml.etree.ElementTree as ET
 import zipfile
+from xml.dom import minidom
 
 # Function to parse XML files
 def load_xml(file):
@@ -23,6 +24,12 @@ def update_ids(tree, old_culture_id, new_culture_id, npc_mappings):
             elif elem.attrib[attr] in npc_mappings:
                 elem.set(attr, npc_mappings[elem.attrib[attr]])
     return tree
+
+# Function to pretty-print XML
+def pretty_print_xml(tree):
+    xml_str = ET.tostring(tree.getroot(), encoding="utf-8", method="xml")
+    reparsed = minidom.parseString(xml_str)
+    return reparsed.toprettyxml(indent="    ")
 
 # Streamlit UI
 st.title("XML Editor for Culture & NPC IDs")
@@ -76,4 +83,10 @@ if uploaded_files:
 
             with open("modified_xmls.zip", "rb") as f:
                 st.download_button("Download Modified XMLs", f, "modified_xmls.zip")
+
+        # Show pretty-printed XML of the first uploaded file
+        if uploaded_files:
+            st.subheader("Pretty-Printed XML Output")
+            pretty_xml = pretty_print_xml(spcultures)
+            st.code(pretty_xml, language="xml")
 
