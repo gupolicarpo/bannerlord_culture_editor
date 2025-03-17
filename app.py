@@ -13,28 +13,6 @@ def load_xml(file):
         st.error(f"Error parsing {file.name}: {e}")
         return None
 
-# Function to update IDs in XML (also updates NPCs and other related entries)
-def update_ids(tree, old_culture_id, new_culture_id, npc_mappings):
-    root = tree.getroot()
-    
-    # Iterate over all elements and attributes to update references
-    for elem in root.iter():
-        # Update culture references in attributes
-        for attr in elem.attrib:
-            if elem.attrib[attr] == f"Culture.{old_culture_id}":
-                elem.set(attr, f"Culture.{new_culture_id}")
-            elif elem.attrib[attr] == old_culture_id:
-                elem.set(attr, new_culture_id)
-            elif elem.attrib[attr] in npc_mappings:
-                elem.set(attr, npc_mappings[elem.attrib[attr]])
-
-        # Additionally, check for NPC names within inner text (e.g., inside <name> tags)
-        if elem.tag == "name" and "NPCCharacter" in elem.text:
-            if elem.text in npc_mappings:
-                elem.text = npc_mappings[elem.text]
-    
-    return tree
-
 # Function to fix malformed XML content
 def fix_malformed_xml(content: str) -> str:
     """Corrects common XML issues before formatting"""
@@ -46,18 +24,27 @@ def fix_malformed_xml(content: str) -> str:
 # Function to format XML with pretty printing and aligned attributes
 def format_xml_string(xml_str: str) -> str:
     """Full XML formatting pipeline"""
-    corrected = fix_malformed_xml(xml_str)  # Fix common issues
-    parsed = minidom.parseString(corrected)
-    pretty_xml = parsed.toprettyxml(indent="    ")
-    
-    # Step 3: Attribute alignment
-    return re.sub(
-        r"(<[\w:]+)(\s+[^>]*?)(/?>)", 
-        lambda m: m.group(1) + "\n    " + "\n    ".join(
-            re.findall(r'\b\w+=".*?"', m.group(2))
-        ) + m.group(3),
-        pretty_xml
-    )
+    try:
+        # Step 1: Fix common issues
+        corrected = fix_malformed_xml(xml_str)
+        
+        # Step 2: Parse the fixed XML
+        parsed = minidom.parseString(corrected)
+        pretty_xml = parsed.toprettyxml(indent="    ")
+        
+        # Step 3: Align attributes with newlines
+        formatted_xml = re.sub(
+            r"(<[\w:]+)(\s+[^>]*?)(/?>)", 
+            lambda m: m.group(1) + "\n    " + "\n    ".join(
+                re.findall(r'\b\w+=".*?"', m.group(2))
+            ) + m.group(3),
+            pretty_xml
+        )
+        
+        return formatted_xml
+    except Exception as e:
+        st.error(f"Error formatting XML: {e}")
+        return None
 
 # Streamlit UI
 st.title("XML Editor for Culture & NPC IDs")
@@ -115,8 +102,12 @@ if uploaded_files:
         # Show pretty-printed XML of the first uploaded file
         if uploaded_files:
             st.subheader("Pretty-Printed XML Output")
-            pretty_xml = format_xml_string(ET.tostring(spcultures.getroot(), encoding="utf-8").decode("utf-8"))
-            st.code(pretty_xml, language="xml")
+            formatted_xml = format_xml_string(ET.tostring(spcultures.getroot(), encoding="utf-8").decode("utf-8"))
+            if formatted_xml:
+                st.code(formatted_xml, language="xml")
+            else:
+                st.error("Failed to format XML.")
+
 
 
 
