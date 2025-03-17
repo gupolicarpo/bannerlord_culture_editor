@@ -13,33 +13,19 @@ def save_xml(tree, file_path):
     tree.write(file_path)
 
 # Function to propagate changes to related files based on spcultures_vlandia.xml
-def propagate_changes_to_related_files(modified_data):
+def propagate_changes_to_related_files(modified_data, uploaded_files):
     """
     Given the modified data (e.g., NPC names, equipment, traits in spcultures_vlandia.xml),
     propagate the changes to all related files.
     """
-    xml_files = [
-        '/mnt/data/spclans_vlandia.xml',
-        '/mnt/data/education_character_templates_vlandia.xml',
-        '/mnt/data/education_equipment_templates_vlandia.xml',
-        '/mnt/data/heroes_vlandia.xml',
-        '/mnt/data/lords_vlandia.xml',
-        '/mnt/data/module_strings_vlandia_complete.xml',
-        '/mnt/data/partyTemplates_vlandia.xml',
-        '/mnt/data/sandboxcore_equipment_sets_vlandia.xml',
-        '/mnt/data/troops_vlandia.xml',
-        '/mnt/data/spgenericcharacters_vlandia.xml',
-        '/mnt/data/spkingdoms_vlandia.xml',
-        '/mnt/data/spnpccharacters_vlandia.xml',
-        '/mnt/data/spspecialcharacters_vlandia.xml'
-    ]
+    xml_files = uploaded_files  # List of uploaded XML files
 
     # Iterate through each file and apply the changes based on the modified data
     for file in xml_files:
         tree, root = parse_xml(file)
         
         # Modify the culture, NPC names, equipment, or other elements based on the modified data
-        if file == '/mnt/data/spcultures_vlandia.xml':
+        if 'spcultures_vlandia.xml' in file:
             # For the culture file itself, we will be changing NPC names, culture ID, etc.
             for elem in root.iter():
                 # Example: Update culture name
@@ -73,22 +59,36 @@ def propagate_changes_to_related_files(modified_data):
 # Main Streamlit app
 def main():
     st.title("Vlandia Culture Mod Editor")
-    st.write("Update NPCs, equipment, and other data in the spcultures_vlandia.xml and propagate changes across all related files.")
+    st.write("Upload the necessary files, modify NPCs, equipment, and other data in spcultures_vlandia.xml and propagate changes across all related files.")
 
-    # Example: Modify NPC names, culture IDs, and equipment
-    modified_data = {
-        "old_culture": "Culture.wulf",  # Old culture ID
-        "new_culture": "Culture.new_culture",  # New culture ID
-        "old_npc_name": "Old NPC Name",  # NPC name to change
-        "new_npc_name": "New NPC Name",  # New NPC name
-        "old_equipment_id": "Item.old_equipment",  # Old equipment ID
-        "new_equipment_id": "Item.new_equipment"  # New equipment ID
-    }
+    # Step 1: File Upload Section
+    uploaded_files = st.file_uploader("Upload XML files", type=["xml"], accept_multiple_files=True)
+    
+    if uploaded_files:
+        # Save uploaded files locally
+        uploaded_file_paths = []
+        for uploaded_file in uploaded_files:
+            file_path = os.path.join('/mnt/data', uploaded_file.name)
+            with open(file_path, "wb") as f:
+                f.write(uploaded_file.getbuffer())
+            uploaded_file_paths.append(file_path)
+        
+        st.write("Files uploaded successfully. Now, make the modifications!")
 
-    # Allow the user to trigger the changes
-    if st.button('Propagate Changes'):
-        propagate_changes_to_related_files(modified_data)
-        st.success("Changes have been successfully propagated across all files!")
+        # Step 2: Modify Data (for example, NPC names, culture ID)
+        modified_data = {
+            "old_culture": "Culture.wulf",  # Old culture ID
+            "new_culture": "Culture.new_culture",  # New culture ID
+            "old_npc_name": "Old NPC Name",  # NPC name to change
+            "new_npc_name": "New NPC Name",  # New NPC name
+            "old_equipment_id": "Item.old_equipment",  # Old equipment ID
+            "new_equipment_id": "Item.new_equipment"  # New equipment ID
+        }
+
+        # Allow the user to trigger the changes
+        if st.button('Propagate Changes'):
+            propagate_changes_to_related_files(modified_data, uploaded_file_paths)
+            st.success("Changes have been successfully propagated across all files!")
 
 if __name__ == '__main__':
     main()
