@@ -13,10 +13,13 @@ def load_xml(file):
         st.error(f"Error parsing {file.name}: {e}")
         return None
 
-# Function to update IDs in XML
+# Function to update IDs in XML (also updates NPCs and other related entries)
 def update_ids(tree, old_culture_id, new_culture_id, npc_mappings):
     root = tree.getroot()
+    
+    # Iterate over all elements and attributes to update references
     for elem in root.iter():
+        # Update culture references in attributes
         for attr in elem.attrib:
             if elem.attrib[attr] == f"Culture.{old_culture_id}":
                 elem.set(attr, f"Culture.{new_culture_id}")
@@ -24,29 +27,26 @@ def update_ids(tree, old_culture_id, new_culture_id, npc_mappings):
                 elem.set(attr, new_culture_id)
             elif elem.attrib[attr] in npc_mappings:
                 elem.set(attr, npc_mappings[elem.attrib[attr]])
+
+        # Additionally, check for NPC names within inner text (e.g., inside <name> tags)
+        if elem.tag == "name" and "NPCCharacter" in elem.text:
+            if elem.text in npc_mappings:
+                elem.text = npc_mappings[elem.text]
+    
     return tree
 
 # Function to fix malformed XML content
 def fix_malformed_xml(content: str) -> str:
     """Corrects common XML issues before formatting"""
-    # Fix malformed opening tags (e.g., <tag<tag>)
-    content = re.sub(r"<(\w+)<", r"<\1 ", content)
-    
-    # Add missing quotes for attributes (e.g., =value without quotes)
-    content = re.sub(r'=\s*([^"\s]+)(\s|>)', r'="\1"\2', content)
-    
-    # Close unclosed tags (e.g., <tag> instead of <tag>)
-    content = re.sub(r"<(\w+)([^>]*)>", r"<\1\2>", content)
-    
+    content = re.sub(r"<(\w+)<", r"<\1 ", content)  # Fix malformed opening tags
+    content = re.sub(r'=\s*([^"\s]+)(\s|>)', r'="\1"\2', content)  # Add missing quotes
+    content = re.sub(r"<(\w+)([^>]*)>", r"<\1\2>", content)  # Close unclosed tags
     return content
 
 # Function to format XML with pretty printing and aligned attributes
 def format_xml_string(xml_str: str) -> str:
     """Full XML formatting pipeline"""
-    # Step 1: Fix fundamental syntax issues
-    corrected = fix_malformed_xml(xml_str)
-    
-    # Step 2: Standard pretty-printing
+    corrected = fix_malformed_xml(xml_str)  # Fix common issues
     parsed = minidom.parseString(corrected)
     pretty_xml = parsed.toprettyxml(indent="    ")
     
@@ -117,6 +117,7 @@ if uploaded_files:
             st.subheader("Pretty-Printed XML Output")
             pretty_xml = format_xml_string(ET.tostring(spcultures.getroot(), encoding="utf-8").decode("utf-8"))
             st.code(pretty_xml, language="xml")
+
 
 
 
