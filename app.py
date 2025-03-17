@@ -1,7 +1,8 @@
 import streamlit as st
 import xml.etree.ElementTree as ET
-from xml.dom import minidom
 import zipfile
+from xml.dom import minidom
+import re
 
 # Function to parse XML files
 def load_xml(file):
@@ -25,14 +26,38 @@ def update_ids(tree, old_culture_id, new_culture_id, npc_mappings):
                 elem.set(attr, npc_mappings[elem.attrib[attr]])
     return tree
 
-# Function to pretty-print XML with line breaks and indentation
-def pretty_print_xml(tree):
-    # Convert the XML tree to a string
-    xml_str = ET.tostring(tree.getroot(), encoding="utf-8", method="xml")
-    # Use minidom to parse and prettify the XML string
-    reparsed = minidom.parseString(xml_str)
-    # Return a string with proper indentation
-    return reparsed.toprettyxml(indent="    ")
+# Function to fix malformed XML content
+def fix_malformed_xml(content: str) -> str:
+    """Corrects common XML issues before formatting"""
+    # Fix malformed opening tags (e.g., <tag<tag>)
+    content = re.sub(r"<(\w+)<", r"<\1 ", content)
+    
+    # Add missing quotes for attributes (e.g., =value without quotes)
+    content = re.sub(r'=\s*([^"\s]+)(\s|>)', r'="\1"\2', content)
+    
+    # Close unclosed tags (e.g., <tag> instead of <tag>)
+    content = re.sub(r"<(\w+)([^>]*)>", r"<\1\2>", content)
+    
+    return content
+
+# Function to format XML with pretty printing and aligned attributes
+def format_xml_string(xml_str: str) -> str:
+    """Full XML formatting pipeline"""
+    # Step 1: Fix fundamental syntax issues
+    corrected = fix_malformed_xml(xml_str)
+    
+    # Step 2: Standard pretty-printing
+    parsed = minidom.parseString(corrected)
+    pretty_xml = parsed.toprettyxml(indent="    ")
+    
+    # Step 3: Attribute alignment
+    return re.sub(
+        r"(<[\w:]+)(\s+[^>]*?)(/?>)", 
+        lambda m: m.group(1) + "\n    " + "\n    ".join(
+            re.findall(r'\b\w+=".*?"', m.group(2))
+        ) + m.group(3),
+        pretty_xml
+    )
 
 # Streamlit UI
 st.title("XML Editor for Culture & NPC IDs")
@@ -88,10 +113,10 @@ if uploaded_files:
                 st.download_button("Download Modified XMLs", f, "modified_xmls.zip")
 
         # Show pretty-printed XML of the first uploaded file
-        st.subheader("Pretty-Printed XML Output")
-        pretty_xml = pretty_print_xml(spcultures)
+        if uploaded_files:
+            st.subheader("Pretty-Printed XML Output")
+            pretty_xml = format_xml_string(ET.tostring(spcultures.getroot(), encoding="utf-8").decode("utf-8"))
+            st.code(pretty_xml, language="xml")
 
-        # Use st.text_area for multiline display to ensure proper formatting
-        st.text_area("Formatted XML Output", pretty_xml, height=600)  # Text area for vertical layout
 
 
