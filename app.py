@@ -30,9 +30,9 @@ if culture_file:
     
     # Create a list of all relevant IDs from the culture file (troops, culture IDs, etc.)
     culture_dict = {}
-    
+
+    # Parse for the relevant IDs: troop IDs and culture IDs
     for elem in root.iter():
-        # Look for relevant troop and culture elements
         if elem.tag in ['melee_militia_troop', 'basic_troop', 'elite_basic_troop', 'ranged_militia_troop', 'culture']:
             culture_dict[elem.attrib['id']] = elem.tag
     
@@ -74,4 +74,3 @@ if culture_file:
                     st.download_button(label=f"Download updated {filename}", data=output.getvalue(), file_name=filename)
             else:
                 st.warning("Please enter a valid new ID.")
-
