@@ -1,152 +1,63 @@
 import streamlit as st
 import xml.etree.ElementTree as ET
-import tempfile
-import zipfile
-import io
-import os
+from io import StringIO
 
-# Function to read and parse an XML file
-def parse_xml(file_path):
-    tree = ET.parse(file_path)
+# Step 1: File upload
+st.title('Khuzait Culture Modding App')
+
+# Upload the culture file and related mod files
+culture_file = st.file_uploader('Upload sp_cultures_khuzait.xml', type='xml')
+other_files = {
+    "spnpccharacters_khuzait.xml": st.file_uploader('Upload spnpccharacters_khuzait.xml', type='xml'),
+    "partyTemplates_khuzait.xml": st.file_uploader('Upload partyTemplates_khuzait.xml', type='xml'),
+    "spnpccharactertemplates_khuzait.xml": st.file_uploader('Upload spnpccharactertemplates_khuzait.xml', type='xml'),
+    "spclans_khuzait.xml": st.file_uploader('Upload spclans_khuzait.xml', type='xml'),
+}
+
+# Step 2: Parse the culture file and detect changes
+if culture_file:
+    tree = ET.parse(culture_file)
     root = tree.getroot()
-    return tree, root
-
-# Function to extract all relevant data from spcultures_vlandia.xml
-def extract_culture_data(file_path):
-    tree, root = parse_xml(file_path)
-    culture_data = {}
-
-    # Extract relevant data like culture ID, NPC names, equipment, etc.
-    for elem in root.iter():
-        if elem.tag == 'culture':  # Assuming culture ID is in <culture> tags
-            culture_data['culture_id'] = elem.text
-        elif elem.tag == 'name':  # Assuming NPC names are stored under <name> tags
-            if 'npc_names' not in culture_data:
-                culture_data['npc_names'] = []
-            culture_data['npc_names'].append(elem.text)
-        elif elem.tag == 'equipment':  # Assuming equipment IDs are stored under <equipment> tags
-            if 'equipment_ids' not in culture_data:
-                culture_data['equipment_ids'] = []
-            culture_data['equipment_ids'].append(elem.text)
-        # Add more tags to extract data for other relevant fields like traits, skills, etc.
-
-    return culture_data
-
-# Function to save the modified XML tree back to file
-def save_xml(tree, file_path):
-    tree.write(file_path)
-
-# Function to propagate changes to related files
-def propagate_changes_to_related_files(modified_data, uploaded_files):
-    """
-    Given the modified data, propagate the changes to all related files.
-    """
-    updated_files = []  # List to store paths of updated files
-
-    # Iterate through each file and apply the changes based on the modified data
-    for file in uploaded_files:
-        tree, root = parse_xml(file)
-        
-        # Apply changes to spcultures_vlandia.xml (or any other file)
-        for elem in root.iter():
-            if elem.tag == 'culture' and elem.text == modified_data.get('old_culture'):
-                elem.text = modified_data.get('new_culture')
-            
-            if elem.tag == 'name' and elem.text == modified_data.get('old_npc_name'):
-                elem.text = modified_data.get('new_npc_name')
-            
-            if elem.tag == 'equipment' and elem.text == modified_data.get('old_equipment_id'):
-                elem.text = modified_data.get('new_equipment_id')
-
-        # Save the modified file
-        save_xml(tree, file)
-        updated_files.append(file)
-
-    return updated_files
-
-# Function to zip the updated files
-def zip_files(file_paths):
-    # Create a BytesIO buffer to hold the zip file
-    zip_buffer = io.BytesIO()
-
-    # Create a zip file in memory
-    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
-        for file_path in file_paths:
-            zip_file.write(file_path, os.path.basename(file_path))
-
-    # Move to the beginning of the buffer
-    zip_buffer.seek(0)
-    return zip_buffer
-
-# Main Streamlit app
-def main():
-    st.title("Vlandia Culture Mod Editor")
-    st.write("Upload the necessary files, modify NPCs, equipment, and other data in spcultures_vlandia.xml and propagate changes across all related files.")
-
-    # Step 1: File Upload Section
-    uploaded_files = st.file_uploader("Upload XML files", type=["xml"], accept_multiple_files=True)
     
-    if uploaded_files:
-        # Save uploaded files temporarily in a temporary directory
-        uploaded_file_paths = []
-        with tempfile.TemporaryDirectory() as tempdir:
-            for uploaded_file in uploaded_files:
-                file_path = os.path.join(tempdir, uploaded_file.name)
-                with open(file_path, "wb") as f:
-                    f.write(uploaded_file.getbuffer())
-                uploaded_file_paths.append(file_path)
-            
-            st.write("Files uploaded successfully. Now, make the modifications!")
+    # Identify IDs that we may modify
+    culture_dict = {}
+    for elem in root.iter():
+        if elem.tag == 'melee_militia_troop':  # Look for troop IDs
+            culture_dict[elem.attrib['id']] = 'melee_militia_troop'
 
-            # Step 2: Extract Data from spcultures_vlandia.xml
-            culture_data = {}
-            for file_path in uploaded_file_paths:
-                if 'spcultures_vlandia.xml' in file_path:
-                    culture_data = extract_culture_data(file_path)
-                    break
+    # Show the available troop IDs to edit
+    troop_id_to_edit = st.selectbox('Select Troop ID to Edit', list(culture_dict.keys()))
 
-            if culture_data:
-                # Pre-populate the form with extracted data
-                with st.form("modify_data"):
-                    # Editable fields pre-filled with the extracted data
-                    old_culture = st.text_input("Old Culture ID", value=culture_data.get('culture_id', ''))
-                    new_culture = st.text_input("New Culture ID", value=f"{culture_data.get('culture_id', '')}_modified")
+    # Input new ID for the selected troop
+    new_troop_id = st.text_input('New Troop ID', value=troop_id_to_edit)
 
-                    old_npc_name = st.text_input("Old NPC Name", value=culture_data.get('npc_names', [])[0] if culture_data.get('npc_names') else '')
-                    new_npc_name = st.text_input("New NPC Name", value=f"{culture_data.get('npc_names', [])[0]}_modified" if culture_data.get('npc_names') else '')
+    # Step 3: Update related files when a change is detected
+    if new_troop_id and troop_id_to_edit != new_troop_id:
+        st.write(f"Updating {troop_id_to_edit} to {new_troop_id} across other files...")
 
-                    old_equipment_id = st.text_input("Old Equipment ID", value=culture_data.get('equipment_ids', [])[0] if culture_data.get('equipment_ids') else '')
-                    new_equipment_id = st.text_input("New Equipment ID", value=f"{culture_data.get('equipment_ids', [])[0]}_modified" if culture_data.get('equipment_ids') else '')
+        # Update each related file
+        updated_files = {}
 
-                    # Submit button
-                    submit_button = st.form_submit_button(label="Apply Changes")
+        for filename, file in other_files.items():
+            if file:
+                # Read the file content
+                file_content = file.getvalue().decode("utf-8")
+                tree = ET.ElementTree(ET.fromstring(file_content))
+                root = tree.getroot()
 
-                    if submit_button:
-                        # Create modified data
-                        modified_data = {
-                            "old_culture": old_culture,
-                            "new_culture": new_culture,
-                            "old_npc_name": old_npc_name,
-                            "new_npc_name": new_npc_name,
-                            "old_equipment_id": old_equipment_id,
-                            "new_equipment_id": new_equipment_id
-                        }
+                # Search and update all references to the old ID
+                for elem in root.iter():
+                    for key, value in elem.attrib.items():
+                        if value == troop_id_to_edit:
+                            elem.set(key, new_troop_id)
+                
+                # Save the updated file in memory
+                updated_files[filename] = tree
 
-                        # Step 3: Propagate Changes and Generate Downloadable Zip
-                        updated_files = propagate_changes_to_related_files(modified_data, uploaded_file_paths)
-                        st.success("Changes have been successfully propagated across all files!")
+        # Step 4: Provide download options for updated files
+        for filename, updated_tree in updated_files.items():
+            output = StringIO()
+            updated_tree.write(output, encoding='utf-8', xml_declaration=True)
+            st.download_button(label=f"Download updated {filename}", data=output.getvalue(), file_name=filename)
 
-                        # Step 4: Zip and Download
-                        # Create a zipped file with the updated files
-                        zip_buffer = zip_files(updated_files)
 
-                        # Provide the download button
-                        st.download_button(
-                            label="Download Updated Files",
-                            data=zip_buffer,
-                            file_name="modified_vlandia_files.zip",
-                            mime="application/zip"
-                        )
-
-if __name__ == '__main__':
-    main()
