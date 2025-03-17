@@ -1,112 +1,98 @@
 import streamlit as st
 import xml.etree.ElementTree as ET
-import zipfile
-from xml.dom import minidom
-import re
+import os
 
-# Function to parse XML files
-def load_xml(file):
-    try:
-        tree = ET.parse(file)
-        return tree
-    except ET.ParseError as e:
-        st.error(f"Error parsing {file.name}: {e}")
-        return None
+# Function to read and parse an XML file
+def parse_xml(file_path):
+    tree = ET.parse(file_path)
+    root = tree.getroot()
+    return tree, root
 
-# Function to fix malformed XML content
-def fix_malformed_xml(content: str) -> str:
-    """Corrects common XML issues before formatting"""
-    content = re.sub(r"<(\w+)<", r"<\1 ", content)  # Fix malformed opening tags
-    content = re.sub(r'=\s*([^"\s]+)(\s|>)', r'="\1"\2', content)  # Add missing quotes
-    content = re.sub(r"<(\w+)([^>]*)>", r"<\1\2>", content)  # Close unclosed tags
-    return content
+# Function to save the modified XML tree back to file
+def save_xml(tree, file_path):
+    tree.write(file_path)
 
-# Function to format XML with pretty printing and aligned attributes
-def format_xml_string(xml_str: str) -> str:
-    """Full XML formatting pipeline"""
-    try:
-        # Step 1: Fix common issues
-        corrected = fix_malformed_xml(xml_str)
+# Function to propagate changes to related files based on spcultures_vlandia.xml
+def propagate_changes_to_related_files(modified_data):
+    """
+    Given the modified data (e.g., NPC names, equipment, traits in spcultures_vlandia.xml),
+    propagate the changes to all related files.
+    """
+    xml_files = [
+        '/mnt/data/spclans_vlandia.xml',
+        '/mnt/data/education_character_templates_vlandia.xml',
+        '/mnt/data/education_equipment_templates_vlandia.xml',
+        '/mnt/data/heroes_vlandia.xml',
+        '/mnt/data/lords_vlandia.xml',
+        '/mnt/data/module_strings_vlandia_complete.xml',
+        '/mnt/data/partyTemplates_vlandia.xml',
+        '/mnt/data/sandboxcore_equipment_sets_vlandia.xml',
+        '/mnt/data/troops_vlandia.xml',
+        '/mnt/data/spgenericcharacters_vlandia.xml',
+        '/mnt/data/spkingdoms_vlandia.xml',
+        '/mnt/data/spnpccharacters_vlandia.xml',
+        '/mnt/data/spspecialcharacters_vlandia.xml'
+    ]
+
+    # Iterate through each file and apply the changes based on the modified data
+    for file in xml_files:
+        tree, root = parse_xml(file)
         
-        # Step 2: Parse the fixed XML
-        parsed = minidom.parseString(corrected)
-        pretty_xml = parsed.toprettyxml(indent="    ")
-        
-        # Step 3: Align attributes with newlines
-        formatted_xml = re.sub(
-            r"(<[\w:]+)(\s+[^>]*?)(/?>)", 
-            lambda m: m.group(1) + "\n    " + "\n    ".join(
-                re.findall(r'\b\w+=".*?"', m.group(2))
-            ) + m.group(3),
-            pretty_xml
-        )
-        
-        return formatted_xml
-    except Exception as e:
-        st.error(f"Error formatting XML: {e}")
-        return None
+        # Modify the culture, NPC names, equipment, or other elements based on the modified data
+        if file == '/mnt/data/spcultures_vlandia.xml':
+            # For the culture file itself, we will be changing NPC names, culture ID, etc.
+            for elem in root.iter():
+                # Example: Update culture name
+                if elem.tag == 'culture' and elem.text == modified_data.get('old_culture'):
+                    elem.text = modified_data.get('new_culture')
+                
+                # Example: Update NPC names
+                if elem.tag == 'name' and elem.text == modified_data.get('old_npc_name'):
+                    elem.text = modified_data.get('new_npc_name')
 
-# Streamlit UI
-st.title("XML Editor for Culture & NPC IDs")
+                # Example: Update equipment IDs
+                if elem.tag == 'equipment' and elem.text == modified_data.get('old_equipment_id'):
+                    elem.text = modified_data.get('new_equipment_id')
 
-uploaded_files = st.file_uploader("Upload XML files", accept_multiple_files=True)
+        # For other files, propagate the relevant changes (NPC names, equipment IDs)
+        else:
+            for elem in root.iter():
+                # Example: Update NPC names in NPC character files
+                if elem.tag == 'name' and elem.text == modified_data.get('old_npc_name'):
+                    elem.text = modified_data.get('new_npc_name')
 
-if uploaded_files:
-    # Load the XML files
-    xml_trees = {file.name: load_xml(file) for file in uploaded_files}
+                # Example: Update equipment IDs
+                if elem.tag == 'equipment' and elem.text == modified_data.get('old_equipment_id'):
+                    elem.text = modified_data.get('new_equipment_id')
 
-    # Debug: Check uploaded files
-    st.write("Uploaded files:", [file.name for file in uploaded_files])
+                # Handle other specific changes as needed, such as culture IDs, traits, etc.
 
-    # Load spcultures.xml to get culture IDs
-    spcultures = xml_trees.get("spcultures_vlandia.xml")  # Ensure correct file name
-    if spcultures:
-        root = spcultures.getroot()
-        culture_ids = [c.get("id") for c in root.findall("Culture")]
+        # Save the modified file
+        save_xml(tree, file)
 
-        # Debug: Check culture IDs
-        st.write("Culture IDs found:", culture_ids)
+# Main Streamlit app
+def main():
+    st.title("Vlandia Culture Mod Editor")
+    st.write("Update NPCs, equipment, and other data in the spcultures_vlandia.xml and propagate changes across all related files.")
 
-        # Culture selection dropdown
-        selected_culture = st.selectbox("Select Culture ID:", culture_ids)
-        new_culture_id = st.text_input("New Culture ID:", selected_culture)
+    # Example: Modify NPC names, culture IDs, and equipment
+    modified_data = {
+        "old_culture": "Culture.wulf",  # Old culture ID
+        "new_culture": "Culture.new_culture",  # New culture ID
+        "old_npc_name": "Old NPC Name",  # NPC name to change
+        "new_npc_name": "New NPC Name",  # New NPC name
+        "old_equipment_id": "Item.old_equipment",  # Old equipment ID
+        "new_equipment_id": "Item.new_equipment"  # New equipment ID
+    }
 
-        # Get NPCs linked to the selected culture
-        npc_mappings = {}
-        for culture in root.findall("Culture"):
-            if culture.get("id") == selected_culture:
-                for attr, value in culture.attrib.items():
-                    if "NPCCharacter" in value:
-                        new_value = st.text_input(f"Rename {value}:", value)
-                        npc_mappings[value] = new_value
+    # Allow the user to trigger the changes
+    if st.button('Propagate Changes'):
+        propagate_changes_to_related_files(modified_data)
+        st.success("Changes have been successfully propagated across all files!")
 
-        # Debug: Show NPC mappings
-        st.write("NPC Mappings for selected culture:", npc_mappings)
+if __name__ == '__main__':
+    main()
 
-        # Apply changes
-        if st.button("Apply Changes"):
-            for file_name, tree in xml_trees.items():
-                xml_trees[file_name] = update_ids(tree, selected_culture, new_culture_id, npc_mappings)
-
-            st.success("Changes applied!")
-
-            # Save updated XMLs in a zip file
-            with zipfile.ZipFile("modified_xmls.zip", "w") as zipf:
-                for file_name, tree in xml_trees.items():
-                    tree.write(file_name, encoding="utf-8")
-                    zipf.write(file_name)
-
-            with open("modified_xmls.zip", "rb") as f:
-                st.download_button("Download Modified XMLs", f, "modified_xmls.zip")
-
-        # Show pretty-printed XML of the first uploaded file
-        if uploaded_files:
-            st.subheader("Pretty-Printed XML Output")
-            formatted_xml = format_xml_string(ET.tostring(spcultures.getroot(), encoding="utf-8").decode("utf-8"))
-            if formatted_xml:
-                st.code(formatted_xml, language="xml")
-            else:
-                st.error("Failed to format XML.")
 
 
 
