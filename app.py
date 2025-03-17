@@ -25,7 +25,7 @@ def update_ids(tree, old_culture_id, new_culture_id, npc_mappings):
                 elem.set(attr, npc_mappings[elem.attrib[attr]])
     return tree
 
-# Function to pretty-print XML
+# Function to pretty-print XML with line breaks and indentation
 def pretty_print_xml(tree):
     xml_str = ET.tostring(tree.getroot(), encoding="utf-8", method="xml")
     reparsed = minidom.parseString(xml_str)
@@ -89,4 +89,3 @@ if uploaded_files:
             st.subheader("Pretty-Printed XML Output")
             pretty_xml = pretty_print_xml(spcultures)
             st.code(pretty_xml, language="xml")
-
