@@ -2,12 +2,17 @@
 import streamlit as st
 import xml.etree.ElementTree as ET
 import zipfile
+import xml.dom.minidom as minidom
 
-# Function to parse XML files
-def load_xml(file):
+# Function to parse XML files and format them
+def load_and_format_xml(file):
     try:
         tree = ET.parse(file)
-        return tree
+        root = tree.getroot()
+        # Convert the tree to a string and then format it for better readability
+        xml_str = ET.tostring(root, encoding="utf-8", method="xml").decode("utf-8")
+        formatted_xml = minidom.parseString(xml_str).toprettyxml(indent="  ")
+        return formatted_xml
     except ET.ParseError:
         st.error(f"Error parsing {file.name}")
         return None
@@ -31,8 +36,8 @@ st.title("XML Editor for Culture & NPC IDs")
 uploaded_files = st.file_uploader("Upload XML files", accept_multiple_files=True)
 
 if uploaded_files:
-    # Load the XML files
-    xml_trees = {file.name: load_xml(file) for file in uploaded_files}
+    # Load and format the XML files
+    xml_trees = {file.name: load_and_format_xml(file) for file in uploaded_files}
 
     # Debug: Check uploaded files
     st.write("Uploaded files:", [file.name for file in uploaded_files])
@@ -40,7 +45,11 @@ if uploaded_files:
     # Load spcultures.xml to get culture IDs
     spcultures = xml_trees.get("spcultures_vlandia.xml")  # Ensure correct file name
     if spcultures:
-        root = spcultures.getroot()
+        # Display formatted XML of the selected file
+        st.subheader("Formatted XML for spcultures_vlandia.xml")
+        st.text_area("spcultures_vlandia.xml", spcultures, height=300)
+
+        root = ET.fromstring(spcultures)
         culture_ids = [c.get("id") for c in root.findall("Culture")]
 
         # Debug: Check culture IDs
@@ -65,6 +74,8 @@ if uploaded_files:
         # Apply changes
         if st.button("Apply Changes"):
             for file_name, tree in xml_trees.items():
+                # Re-load original XML and apply the changes
+                tree = ET.parse(uploaded_files[0])  # Re-parse for correct tree structure
                 xml_trees[file_name] = update_ids(tree, selected_culture, new_culture_id, npc_mappings)
 
             st.success("Changes applied!")
@@ -72,8 +83,12 @@ if uploaded_files:
             # Save updated XMLs in a zip file
             with zipfile.ZipFile("modified_xmls.zip", "w") as zipf:
                 for file_name, tree in xml_trees.items():
-                    tree.write(file_name, encoding="utf-8")
+                    # Write the formatted XML to a new file
+                    formatted_xml = load_and_format_xml(uploaded_files[0])  # Format again before saving
+                    with open(file_name, "w", encoding="utf-8") as f:
+                        f.write(formatted_xml)
                     zipf.write(file_name)
 
             with open("modified_xmls.zip", "rb") as f:
                 st.download_button("Download Modified XMLs", f, "modified_xmls.zip")
+
