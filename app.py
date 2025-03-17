@@ -85,7 +85,7 @@ if uploaded_files:
                 st.download_button("Download Modified XMLs", f, "modified_xmls.zip")
 
         # Show pretty-printed XML of the first uploaded file
-        if uploaded_files:
-            st.subheader("Pretty-Printed XML Output")
-            pretty_xml = pretty_print_xml(spcultures)
-            st.code(pretty_xml, language="xml")
+        st.subheader("Pretty-Printed XML Output")
+        pretty_xml = pretty_print_xml(spcultures)
+        st.code(pretty_xml, language="xml")
+
