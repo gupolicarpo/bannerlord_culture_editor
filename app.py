@@ -96,32 +96,47 @@ def main():
             
             st.write("Files uploaded successfully. Now, make the modifications!")
 
-            # Step 2: Modify Data (for example, NPC names, culture ID)
-            modified_data = {
-                "old_culture": "Culture.wulf",  # Old culture ID
-                "new_culture": "Culture.new_culture",  # New culture ID
-                "old_npc_name": "Old NPC Name",  # NPC name to change
-                "new_npc_name": "New NPC Name",  # New NPC name
-                "old_equipment_id": "Item.old_equipment",  # Old equipment ID
-                "new_equipment_id": "Item.new_equipment"  # New equipment ID
-            }
+            # Step 2: Provide Editable Fields for Culture Data (Modify Culture, NPC Names, Equipment IDs)
+            with st.form("modify_data"):
+                # Input fields for modifying culture data
+                old_culture = st.text_input("Old Culture ID", value="Culture.wulf")
+                new_culture = st.text_input("New Culture ID", value="Culture.new_culture")
 
-            # Allow the user to trigger the changes
-            if st.button('Propagate Changes'):
-                updated_files = propagate_changes_to_related_files(modified_data, uploaded_file_paths)
-                st.success("Changes have been successfully propagated across all files!")
+                old_npc_name = st.text_input("Old NPC Name", value="Old NPC Name")
+                new_npc_name = st.text_input("New NPC Name", value="New NPC Name")
 
-                # Step 3: Zip and Download
-                # Create a zipped file with the updated files
-                zip_buffer = zip_files(updated_files)
+                old_equipment_id = st.text_input("Old Equipment ID", value="Item.old_equipment")
+                new_equipment_id = st.text_input("New Equipment ID", value="Item.new_equipment")
 
-                # Provide the download button
-                st.download_button(
-                    label="Download Updated Files",
-                    data=zip_buffer,
-                    file_name="modified_vlandia_files.zip",
-                    mime="application/zip"
-                )
+                # Submit button
+                submit_button = st.form_submit_button(label="Apply Changes")
+
+                if submit_button:
+                    # Create modified data
+                    modified_data = {
+                        "old_culture": old_culture,
+                        "new_culture": new_culture,
+                        "old_npc_name": old_npc_name,
+                        "new_npc_name": new_npc_name,
+                        "old_equipment_id": old_equipment_id,
+                        "new_equipment_id": new_equipment_id
+                    }
+
+                    # Step 3: Propagate Changes and Generate Downloadable Zip
+                    updated_files = propagate_changes_to_related_files(modified_data, uploaded_file_paths)
+                    st.success("Changes have been successfully propagated across all files!")
+
+                    # Step 4: Zip and Download
+                    # Create a zipped file with the updated files
+                    zip_buffer = zip_files(updated_files)
+
+                    # Provide the download button
+                    st.download_button(
+                        label="Download Updated Files",
+                        data=zip_buffer,
+                        file_name="modified_vlandia_files.zip",
+                        mime="application/zip"
+                    )
 
 if __name__ == '__main__':
     main()
