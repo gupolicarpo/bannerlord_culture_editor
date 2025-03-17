@@ -11,6 +11,25 @@ def parse_xml(file_path):
     root = tree.getroot()
     return tree, root
 
+# Function to extract relevant data from spcultures_vlandia.xml
+def extract_culture_data(file_path):
+    tree, root = parse_xml(file_path)
+    culture_data = {}
+
+    for elem in root.iter():
+        if elem.tag == 'culture':
+            culture_data['culture_id'] = elem.text
+        if elem.tag == 'name':  # Assuming NPC names are stored under <name> tags
+            if 'npc_names' not in culture_data:
+                culture_data['npc_names'] = []
+            culture_data['npc_names'].append(elem.text)
+        if elem.tag == 'equipment':  # Assuming equipment IDs are stored under <equipment> tags
+            if 'equipment_ids' not in culture_data:
+                culture_data['equipment_ids'] = []
+            culture_data['equipment_ids'].append(elem.text)
+
+    return culture_data
+
 # Function to save the modified XML tree back to file
 def save_xml(tree, file_path):
     tree.write(file_path)
@@ -54,8 +73,6 @@ def propagate_changes_to_related_files(modified_data, uploaded_files):
                 if elem.tag == 'equipment' and elem.text == modified_data.get('old_equipment_id'):
                     elem.text = modified_data.get('new_equipment_id')
 
-                # Handle other specific changes as needed, such as culture IDs, traits, etc.
-
         # Save the modified file
         save_xml(tree, file)
         updated_files.append(file)
@@ -96,50 +113,59 @@ def main():
             
             st.write("Files uploaded successfully. Now, make the modifications!")
 
-            # Step 2: Provide Editable Fields for Culture Data (Modify Culture, NPC Names, Equipment IDs)
-            with st.form("modify_data"):
-                # Input fields for modifying culture data
-                old_culture = st.text_input("Old Culture ID", value="Culture.wulf")
-                new_culture = st.text_input("New Culture ID", value="Culture.new_culture")
+            # Step 2: Extract Data from spcultures_vlandia.xml (e.g., culture ID, NPC names, equipment IDs)
+            culture_data = {}
+            for file_path in uploaded_file_paths:
+                if 'spcultures_vlandia.xml' in file_path:
+                    culture_data = extract_culture_data(file_path)
+                    break
 
-                old_npc_name = st.text_input("Old NPC Name", value="Old NPC Name")
-                new_npc_name = st.text_input("New NPC Name", value="New NPC Name")
+            if culture_data:
+                # Pre-populate the form with extracted data
+                with st.form("modify_data"):
+                    # Editable fields pre-filled with the extracted data
+                    old_culture = st.text_input("Old Culture ID", value=culture_data.get('culture_id', ''))
+                    new_culture = st.text_input("New Culture ID", value=f"{culture_data.get('culture_id', '')}_modified")
 
-                old_equipment_id = st.text_input("Old Equipment ID", value="Item.old_equipment")
-                new_equipment_id = st.text_input("New Equipment ID", value="Item.new_equipment")
+                    old_npc_name = st.text_input("Old NPC Name", value=culture_data.get('npc_names', [])[0] if culture_data.get('npc_names') else '')
+                    new_npc_name = st.text_input("New NPC Name", value=f"{culture_data.get('npc_names', [])[0]}_modified" if culture_data.get('npc_names') else '')
 
-                # Submit button
-                submit_button = st.form_submit_button(label="Apply Changes")
+                    old_equipment_id = st.text_input("Old Equipment ID", value=culture_data.get('equipment_ids', [])[0] if culture_data.get('equipment_ids') else '')
+                    new_equipment_id = st.text_input("New Equipment ID", value=f"{culture_data.get('equipment_ids', [])[0]}_modified" if culture_data.get('equipment_ids') else '')
 
-                if submit_button:
-                    # Create modified data
-                    modified_data = {
-                        "old_culture": old_culture,
-                        "new_culture": new_culture,
-                        "old_npc_name": old_npc_name,
-                        "new_npc_name": new_npc_name,
-                        "old_equipment_id": old_equipment_id,
-                        "new_equipment_id": new_equipment_id
-                    }
+                    # Submit button
+                    submit_button = st.form_submit_button(label="Apply Changes")
 
-                    # Step 3: Propagate Changes and Generate Downloadable Zip
-                    updated_files = propagate_changes_to_related_files(modified_data, uploaded_file_paths)
-                    st.success("Changes have been successfully propagated across all files!")
+                    if submit_button:
+                        # Create modified data
+                        modified_data = {
+                            "old_culture": old_culture,
+                            "new_culture": new_culture,
+                            "old_npc_name": old_npc_name,
+                            "new_npc_name": new_npc_name,
+                            "old_equipment_id": old_equipment_id,
+                            "new_equipment_id": new_equipment_id
+                        }
 
-                    # Step 4: Zip and Download
-                    # Create a zipped file with the updated files
-                    zip_buffer = zip_files(updated_files)
+                        # Step 3: Propagate Changes and Generate Downloadable Zip
+                        updated_files = propagate_changes_to_related_files(modified_data, uploaded_file_paths)
+                        st.success("Changes have been successfully propagated across all files!")
 
-                    # Provide the download button
-                    st.download_button(
-                        label="Download Updated Files",
-                        data=zip_buffer,
-                        file_name="modified_vlandia_files.zip",
-                        mime="application/zip"
-                    )
+                        # Step 4: Zip and Download
+                        # Create a zipped file with the updated files
+                        zip_buffer = zip_files(updated_files)
+
+                        # Provide the download button
+                        st.download_button(
+                            label="Download Updated Files",
+                            data=zip_buffer,
+                            file_name="modified_vlandia_files.zip",
+                            mime="application/zip"
+                        )
 
 if __name__ == '__main__':
     main()
+
 
 
 
