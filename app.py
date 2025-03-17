@@ -1,7 +1,7 @@
 import streamlit as st
 import xml.etree.ElementTree as ET
-import zipfile
 from xml.dom import minidom
+import zipfile
 
 # Function to parse XML files
 def load_xml(file):
@@ -27,8 +27,11 @@ def update_ids(tree, old_culture_id, new_culture_id, npc_mappings):
 
 # Function to pretty-print XML with line breaks and indentation
 def pretty_print_xml(tree):
+    # Convert the XML tree to a string
     xml_str = ET.tostring(tree.getroot(), encoding="utf-8", method="xml")
+    # Use minidom to parse and prettify the XML string
     reparsed = minidom.parseString(xml_str)
+    # Return a string with proper indentation
     return reparsed.toprettyxml(indent="    ")
 
 # Streamlit UI
@@ -87,5 +90,8 @@ if uploaded_files:
         # Show pretty-printed XML of the first uploaded file
         st.subheader("Pretty-Printed XML Output")
         pretty_xml = pretty_print_xml(spcultures)
-        st.code(pretty_xml, language="xml")
+
+        # Instead of st.code(), use st.text to show the XML vertically formatted
+        st.text(pretty_xml)  # Display prettified XML directly as text (not in a code block)
+
 
