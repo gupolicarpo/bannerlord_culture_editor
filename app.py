@@ -91,7 +91,7 @@ if uploaded_files:
         st.subheader("Pretty-Printed XML Output")
         pretty_xml = pretty_print_xml(spcultures)
 
-        # Instead of st.code(), use st.text to show the XML vertically formatted
-        st.text(pretty_xml)  # Display prettified XML directly as text (not in a code block)
+        # Use st.text_area for multiline display to ensure proper formatting
+        st.text_area("Formatted XML Output", pretty_xml, height=600)  # Text area for vertical layout
 
 
