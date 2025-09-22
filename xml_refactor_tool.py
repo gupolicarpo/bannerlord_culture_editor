@@ -5,6 +5,7 @@ from lxml import etree # Import lxml's etree module
 from io import BytesIO
 import zipfile
 import re
+import pandas as pd
 
 # --- Configuration ---
 # Common attributes that reference IDs (add more as needed)
@@ -354,8 +355,8 @@ st.warning("⚠️ **Prototype Limitations:** Basic ID detection. No pattern ren
 # --- Session State Initialization ---
 default_state = {
     'uploaded_files_data': {}, 'parsed_xml_data': {}, 'definitions': {},
-    'references': {}, 'primary_file': None, 'selected_attribute_key': None,
-    'selected_ref_info': None, 'new_id_input_value': "",
+    'references': {}, 'primary_file': None,
+    'attribute_table_data': None, 'attribute_table_source_file': None,
     'refactor_results': [], 'show_download': False
 }
 for key, value in default_state.items():
@@ -412,16 +413,16 @@ if uploaded_files:
             selected_primary_file = st.selectbox("Select primary file to browse:", parsed_file_names, index=parsed_file_names.index(st.session_state.primary_file), key="primary_file_selector")
             if selected_primary_file != st.session_state.primary_file:
                 st.session_state.primary_file = selected_primary_file
-                st.session_state.selected_attribute_key, st.session_state.selected_ref_info, st.session_state.new_id_input_value = None, None, ""
+                st.session_state.attribute_table_data = None
+                st.session_state.attribute_table_source_file = None
                 st.rerun()
 
             st.subheader(f"Select Attribute to Refactor in '{st.session_state.primary_file}'")
-            attribute_options = {"<Select an attribute>": None}
+            attribute_rows = []
             primary_tree = st.session_state.parsed_xml_data.get(st.session_state.primary_file)
             if primary_tree:
                 try:
                     root = primary_tree.getroot()
-                    count = 0
                     for element in root.iter():
                         if not isinstance(element.tag, str): continue # Skip comments/PIs
                         elem_path_str = get_element_path(element)
@@ -446,64 +447,113 @@ if uploaded_files:
                                      if parts[0] and parts[0][0].isupper() and len(parts[0]) > 1: prefix, base_id, is_reference = parts[0] + ".", parts[1], True
                             # Add option if it's a reference
                             if is_reference and base_id:
-                                display_text = f'{elem_path_str} | {attr_name}="{original_value}"'
-                                option_key = f"{st.session_state.primary_file}-{count}"
-                                attribute_options[display_text] = {
-                                    "key": option_key, "file": st.session_state.primary_file,
-                                    "element_repr": elem_path_str, "attribute_name": attr_name,
-                                    "original_value": original_value, "old_id": base_id, "prefix": prefix
-                                }
-                                count += 1
+                                attribute_rows.append({
+                                    "Element": elem_path_str,
+                                    "Attribute": attr_name,
+                                    "Prefix": prefix or "",
+                                    "Original Value": original_value,
+                                    "Base ID": base_id,
+                                    "New Base ID": base_id
+                                })
                 except Exception as e: st.error(f"Error iterating elements in {st.session_state.primary_file}: {e}")
 
-            if len(attribute_options) <= 1: st.info(f"No potential ID references found in '{st.session_state.primary_file}'.")
+            if not attribute_rows:
+                st.info(f"No potential ID references found in '{st.session_state.primary_file}'.")
             else:
-                 option_keys = list(attribute_options.keys())
-                 current_attr_index = 0
-                 if st.session_state.selected_attribute_key:
-                      try: current_attr_index = next(i for i, k in enumerate(option_keys) if attribute_options[k] and attribute_options[k]['key'] == st.session_state.selected_attribute_key)
-                      except (StopIteration, ValueError): current_attr_index = 0
-                 selected_attr_display = st.selectbox("Select attribute to modify:", option_keys, index=current_attr_index, key="attribute_selector")
-                 selected_info = attribute_options.get(selected_attr_display)
-                 if selected_info: st.session_state.selected_attribute_key, st.session_state.selected_ref_info = selected_info['key'], selected_info
-                 else: st.session_state.selected_attribute_key, st.session_state.selected_ref_info = None, None
+                if (
+                    st.session_state.attribute_table_data is None
+                    or st.session_state.attribute_table_source_file != st.session_state.primary_file
+                ):
+                    st.session_state.attribute_table_data = attribute_rows
+                    st.session_state.attribute_table_source_file = st.session_state.primary_file
 
-                 if st.session_state.selected_ref_info:
-                     ref_info = st.session_state.selected_ref_info
-                     st.write(f"**Selected:** Attribute `{ref_info['attribute_name']}` = `{ref_info['original_value']}`")
-                     st.write(f"(Element: `{ref_info['element_repr']}`, Base ID: `{ref_info['old_id']}`, Prefix: `{ref_info['prefix'] or '(None)'}`)")
-                     new_id_input = st.text_input(f"Enter New Base ID for '{ref_info['old_id']}':", key="new_id_input", value=st.session_state.new_id_input_value)
-                     st.session_state.new_id_input_value = new_id_input
-                     if st.button("Refactor This Attribute Globally", key="refactor_button"):
-                         new_base_id = st.session_state.new_id_input_value.strip()
-                         old_base_id = ref_info['old_id']
-                         if old_base_id and new_base_id and new_base_id != old_base_id:
-                             with st.spinner("Preparing... Creating temporary copies."): # Copy logic remains same
-                                 temp_parsed_data = {}
-                                 copy_success = True
-                                 source_data = st.session_state.parsed_xml_data
-                                 for fname, tree in source_data.items():
-                                      if tree:
-                                           try:
-                                                # Use lxml's tostring/fromstring for copying
-                                                xml_string = etree.tostring(tree.getroot(), encoding='utf-8')
-                                                temp_root = etree.fromstring(xml_string)
-                                                temp_parsed_data[fname] = etree.ElementTree(temp_root)
-                                           except Exception as e: st.error(f"Error copying {fname}: {e}"); copy_success = False; temp_parsed_data[fname]=None
-                                      else: temp_parsed_data[fname]=None
-                             if not copy_success: st.error("Copying failed. Aborting.")
-                             else:
-                                 with st.spinner("Analyzing copies..."): temp_definitions, temp_references = find_ids(temp_parsed_data) # Uses lxml elements
-                                 with st.spinner(f"Refactoring '{old_base_id}' to '{new_base_id}' globally..."):
-                                     st.session_state.refactor_results = perform_refactor(old_base_id, new_base_id, temp_parsed_data, temp_definitions, temp_references) # Uses lxml elements
-                                 st.session_state.parsed_xml_data = temp_parsed_data
-                                 st.session_state.show_download = True
-                                 st.success(f"Refactoring triggered by '{ref_info['attribute_name']}' complete.")
-                                 st.session_state.definitions, st.session_state.references = find_ids(st.session_state.parsed_xml_data)
-                                 st.session_state.selected_attribute_key, st.session_state.selected_ref_info, st.session_state.new_id_input_value = None, None, ""
-                                 st.rerun()
-                         elif not new_base_id: st.warning("Please enter a New ID.")
-                         elif new_base_id == old_base_id: st.warning("New ID cannot be the same as the Old ID.")
+                table_df = pd.DataFrame(st.session_state.attribute_table_data)
+                if not table_df.empty:
+                    table_df.index.name = "Row"
+                edited_df = st.data_editor(
+                    table_df,
+                    key="attribute_editor",
+                    num_rows="fixed",
+                    use_container_width=True,
+                    column_config={
+                        "Element": st.column_config.TextColumn("Element", disabled=True),
+                        "Attribute": st.column_config.TextColumn("Attribute", disabled=True),
+                        "Prefix": st.column_config.TextColumn("Prefix", disabled=True),
+                        "Original Value": st.column_config.TextColumn("Original Value", disabled=True),
+                        "Base ID": st.column_config.TextColumn("Base ID", disabled=True),
+                        "New Base ID": st.column_config.TextColumn("New Base ID", help="Enter the replacement base ID.")
+                    }
+                )
+
+                st.session_state.attribute_table_data = edited_df.to_dict('records')
+
+                if st.button("Apply Selected ID Changes", key="apply_changes_button"):
+                    edited_records = st.session_state.attribute_table_data or []
+                    pending_changes = {}
+                    conflicts = []
+                    for row in edited_records:
+                        old_base_id = str(row.get("Base ID", "")).strip()
+                        new_base_id = str(row.get("New Base ID", "")).strip()
+                        if not old_base_id:
+                            continue
+                        if not new_base_id:
+                            st.warning(f"Row referencing '{old_base_id}' has an empty New Base ID. Skipping.")
+                            continue
+                        if new_base_id == old_base_id:
+                            continue
+                        if old_base_id in pending_changes and pending_changes[old_base_id] != new_base_id:
+                            conflicts.append((old_base_id, pending_changes[old_base_id], new_base_id))
+                        else:
+                            pending_changes[old_base_id] = new_base_id
+
+                    if conflicts:
+                        conflict_messages = ", ".join(
+                            f"'{old}' -> '{new1}'/'{new2}'" for old, new1, new2 in conflicts
+                        )
+                        st.error(f"Conflicting new IDs for the same base ID: {conflict_messages}.")
+                    elif not pending_changes:
+                        st.info("No ID changes specified.")
+                    else:
+                        with st.spinner("Preparing temporary copies of XML files..."):
+                            temp_parsed_data = {}
+                            copy_success = True
+                            source_data = st.session_state.parsed_xml_data
+                            for fname, tree in source_data.items():
+                                if tree:
+                                    try:
+                                        xml_string = etree.tostring(tree.getroot(), encoding='utf-8')
+                                        temp_root = etree.fromstring(xml_string)
+                                        temp_parsed_data[fname] = etree.ElementTree(temp_root)
+                                    except Exception as e:
+                                        st.error(f"Error copying {fname}: {e}")
+                                        copy_success = False
+                                        temp_parsed_data[fname] = None
+                                else:
+                                    temp_parsed_data[fname] = None
+
+                        if not copy_success:
+                            st.error("Copying failed. Aborting refactor.")
+                        else:
+                            cumulative_results = []
+                            temp_definitions, temp_references = find_ids(temp_parsed_data)
+                            for old_id, new_id in pending_changes.items():
+                                with st.spinner(f"Refactoring '{old_id}' to '{new_id}' globally..."):
+                                    change_log = perform_refactor(old_id, new_id, temp_parsed_data, temp_definitions, temp_references)
+                                    cumulative_results.extend(change_log)
+                                temp_definitions, temp_references = find_ids(temp_parsed_data)
+
+                            st.session_state.parsed_xml_data = temp_parsed_data
+                            st.session_state.definitions, st.session_state.references = temp_definitions, temp_references
+                            st.session_state.refactor_results = cumulative_results
+                            st.session_state.show_download = True
+                            st.session_state.attribute_table_data = None
+                            st.session_state.attribute_table_source_file = None
+
+                            if cumulative_results:
+                                st.success("ID changes applied. Review the summary below before downloading.")
+                            else:
+                                st.info("No matching references were updated.")
+                            st.rerun()
 
     if st.session_state.refactor_results:
          st.subheader("Refactoring Summary:")
